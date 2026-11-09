@@ -21,7 +21,7 @@ services:
       - ruoyi-mysql
   ruoyi-mysql:
     container_name: ruoyi-mysql
-    image: mysql:5.7
+    image: mysql:8.0.46
     build:
       context: ./mysql
     ports:
@@ -34,7 +34,7 @@ services:
           'mysqld',
           '--innodb-buffer-pool-size=80M',
           '--character-set-server=utf8mb4',
-          '--collation-server=utf8mb4_unicode_ci',
+          '--collation-server=utf8mb4_0900_ai_ci',
           '--default-time-zone=+8:00',
           '--lower-case-table-names=1'
         ]

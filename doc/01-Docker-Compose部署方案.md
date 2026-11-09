@@ -62,11 +62,26 @@
 | JDK（本机构建） | Corretto 17.0.21 | JDK 17 | 位于 `C:\Users\orford\.jdks\corretto-17.0.21`，需配置 JAVA_HOME |
 | 应用基础镜像 | `openjdk:17` | `eclipse-temurin:17-jre` | 官方 openjdk 镜像已停止维护，统一替换为 Temurin，需改 7 个 Dockerfile |
 | Nacos | `nacos/nacos-server:v3.0.2` | `nacos/nacos-server:v3.0.2` | 与 Spring Boot 4.x 分支匹配 |
-| MySQL | `mysql:5.7` | `mysql:5.7` | 官方推荐；内网单机可用 |
+| MySQL | `mysql:5.7` | `mysql:8.0.46` | 8.0 LTS 主力版本；5.7 已于 2023-10 EOL，全新部署采用 8.0，详见 2.1 |
 | Redis | `redis`（latest） | `redis:7-alpine` | 锁定大版本，体积小 |
 | Nginx | `nginx`（latest） | `nginx:1.27-alpine` | 锁定稳定版 |
 | Node（构建机） | v22.23.2 | v22.x | 仅本地构建使用，不安装到服务器 |
 | Maven（构建机） | 无命令行 | 3.8+ | 独立安装或使用 IDEA 内置 Maven |
+
+### 2.1 MySQL 8.0 适配说明
+
+官方要求 MySQL >= 5.7，本项目锁定 8.0.46。兼容性已确认：Nacos 自 2.2 版本起支持 MySQL 8.0（3.0.2 无问题），Spring Boot 4.1.0 自带 `mysql-connector-j` 新驱动原生支持。
+
+相对于 5.7 的关键差异与处理方式：
+
+| 差异点 | 说明与处理 |
+| --- | --- |
+| `lower_case_table_names` 初始化时机 | 8.0 要求该参数必须在数据目录**首次初始化时**设置，已有数据后修改会被拒绝启动。compose 已在 command 中保留 `--lower-case-table-names=1`，空数据卷首次启动即生效，**禁止中途修改该参数** |
+| 默认认证插件 | 8.0 默认 `caching_sha2_password`（替代旧的 `mysql_native_password`），新驱动默认支持，无需回退，安全性更高 |
+| 默认排序规则 | 8.0 默认 `utf8mb4_0900_ai_ci`（5.7 为 `utf8mb4_unicode_ci`），compose 已在 command 中显式指定，保证环境行为一致 |
+| 新增保留字 | 8.0 新增 `RANK`、`GROUPS`、`SYSTEM` 等保留字，二次开发建表/字段撞名时需加反引号 |
+| 整数显示宽度 | `bigint(20)` 等显示宽度被弃用，仅产生 warning，不影响功能 |
+| 8.0 新特性 | 窗口函数、CTE 公共表达式、JSON 增强、原子 DDL，可直接用于报表与分析 SQL |
 
 ---
 
@@ -157,6 +172,7 @@ MySQL 镜像通过 `ADD ./db/*.sql /docker-entrypoint-initdb.d/` 在首次启动
 
 - `depends_on` 只保证容器启动顺序，不保证 MySQL 就绪，Nacos 首次可能连库失败后自动重启，观察日志等待自愈即可
 - Nacos 3.x 需同时放行 8848、9848、9849 三个端口
+- MySQL 8.0 首次启动初始化时，`lower_case_table_names=1` 与排序规则 `utf8mb4_0900_ai_ci` 由 command 参数在初始化阶段写入；若已产生过数据卷，需先清空 `docker/mysql/data` 再启动，否则参数不生效会导致容器启动失败
 
 ### 阶段 2：构建产物
 
@@ -298,10 +314,11 @@ git push
 
 | 序号 | 事项 | 状态 |
 | --- | --- | --- |
-| 1 | 修复 `copy.sh` 中过期的 SQL 文件名 | 待执行 |
-| 2 | 统一 MySQL 密码（compose 与 Nacos 配置） | 待执行 |
-| 3 | 补 `.gitignore`（node_modules 等） | 待执行 |
-| 4 | 下载 RuoYi-Cloud-Vue3 放入 `ruoyi-ui` 并删除 `.git` | 待执行 |
-| 5 | 替换 7 个应用 Dockerfile 基础镜像为 `eclipse-temurin:17-jre` | 待执行 |
-| 6 | 本地 Docker Desktop 部署验证 | 待执行 |
-| 7 | Linux 服务器迁移验证 | 待执行 |
+| 1 | MySQL 升级至 8.0.46（compose 镜像、Dockerfile、排序规则与初始化参数适配） | 已完成 |
+| 2 | 修复 `copy.sh` 中过期的 SQL 文件名 | 待执行 |
+| 3 | 统一 MySQL 密码（compose 与 Nacos 配置） | 待执行 |
+| 4 | 补 `.gitignore`（node_modules 等） | 待执行 |
+| 5 | 下载 RuoYi-Cloud-Vue3 放入 `ruoyi-ui` 并删除 `.git` | 待执行 |
+| 6 | 替换 7 个应用 Dockerfile 基础镜像为 `eclipse-temurin:17-jre` | 待执行 |
+| 7 | 本地 Docker Desktop 部署验证 | 待执行 |
+| 8 | Linux 服务器迁移验证 | 待执行 |
